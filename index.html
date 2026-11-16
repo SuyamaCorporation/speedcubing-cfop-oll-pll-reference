@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>スピードキュービング CFOP/OLL/PLL アルゴリズム早見表</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .case-card { transition: box-shadow 0.2s; }
+    .case-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.15); }
+    .weak-btn.active { background-color: #f97316; color: #fff; }
+    .tab-btn.active { border-bottom: 3px solid #f97316; color: #f97316; font-weight: 700; }
+    svg .yellow { fill: #fde047; }
+    svg .grey  { fill: #d1d5db; }
+    svg .orange { fill: #f97316; }
+    svg .white-sq { fill: #ffffff; stroke: #9ca3af; stroke-width:0.5; }
+  </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+  <header class="bg-orange-500 text-white py-4 px-4 shadow">
+    <h1 class="text-xl font-bold">🧊 スピードキュービング CFOP/OLL・PLL 早見表</h1>
+    <p class="text-sm mt-1 opacity-90">57 OLL + 21 PLL アルゴリズム検索・弱点管理</p>
+  </header>
+
+  <div class="max-w-5xl mx-auto px-4 py-4">
+    <!-- Tab -->
+    <div class="flex border-b border-gray-300 mb-4" role="tablist">
+      <button class="tab-btn active px-6 py-2 text-lg" id="tab-oll" role="tab" aria-selected="true" aria-controls="panel-oll">OLL (57)</button>
+      <button class="tab-btn px-6 py-2 text-lg" id="tab-pll" role="tab" aria-selected="false" aria-controls="panel-pll">PLL (21)</button>
+    </div>
+
+    <!-- Search & Filter -->
+    <div class="flex flex-wrap gap-3 mb-4 items-center">
+      <label for="search-input" class="sr-only">検索</label>
+      <input id="search-input" type="search" placeholder="ケース名・アルゴリズムで検索..." class="border border-gray-300 rounded px-3 py-2 w-64 focus:outline-none focus:ring-2 focus:ring-orange-400" />
+      <label class="flex items-center gap-2 cursor-pointer select-none">
+        <input type="checkbox" id="weak-only" class="w-4 h-4 accent-orange-500" />
+        <span class="font-medium text-orange-700">弱点のみ表示</span>
+      </label>
+      <span id="count-badge" class="ml-auto text-sm text-gray-500"></span>
+    </div>
+
+    <!-- Panels -->
+    <div id="panel-oll" role="tabpanel" aria-labelledby="tab-oll">
+      <div id="oll-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3"></div>
+    </div>
+    <div id="panel-pll" role="tabpanel" aria-labelledby="tab-pll" class="hidden">
+      <div id="pll-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3"></div>
+    </div>
+  </div>
+
+<script>
+// ---- Data ----
+// OLL patterns: [id, name, algorithm, top-face 3x3 pattern (Y=yellow,G=grey, center always Y)]
+// Pattern: array of 9 chars for the 3x3 top face (row-major, Y=yellow G=grey)
+const OLL_DATA = [
+  [1,"OLL 1","R U2 R2 F R F' U2 R' F R F'","GYGYGYGGY"],
+  [2,"OLL 2","F R U R' U' F' f R U R' U' f'","GGYGYYGYG"],
+  [3,"OLL 3","f U R U' R' f' U' F R U R' U' F'","GYGYGYGYG"],
+  [4,"OLL 4","f R U R' U' f' U F R U R' U' F'","GYGYGYYGG"],
+  [5,"OLL 5","r' U2 R U R' U r","GYYGYYGYG"],
+  [6,"OLL 6","r U2 R' U' R U' r'","YGGYYYGYG"],
+  [7,"OLL 7","r U R' U R U2 r'","YYGYYGYGY"],
+  [8,"OLL 8","r' U' R U' R' U2 r","GYYGYYGGY"],
+  [9,"OLL 9","R U R' U' R' F R2 U R' U' F'","YGGGYYYYY"],
+  [10,"OLL 10","R U R' U R' F R F' R U2 R'","GYYYGGGGY"],
+  [11,"OLL 11","r' R2 U R' U R U2 R' U M'","GYYGYGGYY"],
+  [12,"OLL 12","M' R' U' R U' R' U2 R U' M","YYGGYGYGY"],
+  [13,"OLL 13","F U R U' R2 F' R U R U' R'","GYYYGYYGG"],
+  [14,"OLL 14","R' F R U R' F' R F U' F'","GGYYGYYYG"],
+  [15,"OLL 15","r' U' r R' U' R U r' U r","YYGYGYYGG"],
+  [16,"OLL 16","r U r' R U R' U' r U' r'","GGYYGYGGY"],
+  [17,"OLL 17","F R' F' R2 r' U R U' R' U' M'","YYYGYYGGG"],
+  [18,"OLL 18","r U R' U R U2 r2 U' R U' R' U2 r","GGGYYYGGY"],
+  [19,"OLL 19","r' R U R U R' U' M' R' F R F'","YYYGGGYYG"],
+  [20,"OLL 20","r U R' U' M2 U R U' R' U' M'","GYGYGYGGG"],
+  [21,"OLL 21","R U2 R' U' R U R' U' R U' R'","YYYYYYYYG"],
+  [22,"OLL 22","R U2 R2 U' R2 U' R2 U2 R","YYYYYYYYY"],
+  [23,"OLL 23","R2 D' R U2 R' D R U2 R","GYYYYYYY"],
+  [24,"OLL 24","r U R' U' r' F R F'","YYYYYYYGY"],
+  [25,"OLL 25","F' r U R' U' r' F R","GYYYYYGGY"],
+  [26,"OLL 26","R U2 R' U' R U' R'","GYGYYYYGY"],
+  [27,"OLL 27","R U R' U R U2 R'","YGYYYYYGY"],
+  [28,"OLL 28","r U R' U' r' R U R U' R'","GYGYYYYYG"],
+  [29,"OLL 29","R U R' U' R U' R' F' U' F R U R'","YYGYYGGYG"],
+  [30,"OLL 30","F R' F R2 U' R' U' R U R' F2","GYYGYYGGY"],
+  [31,"OLL 31","R' U' F U R U' R' F' R","YGGYYGYYY"],
+  [32,"OLL 32","R U B' U' R' U R B R'","YYGGYYGGY"],
+  [33,"OLL 33","R U R' U' R' F R F'","YYYGYGYYY"],
+  [34,"OLL 34","R U R' U' B' R' F R F' B","GYYGYYYYY"],
+  [35,"OLL 35","R U2 R2 F R F' R U2 R'","YYYYGYYGY"],
+  [36,"OLL 36","R' U' R U' R' U R U l U' R' U","GYYYYYYYY"],
+  [37,"OLL 37","F R' F' R U R U' R'","YYYYGYYYY"],
+  [38,"OLL 38","R U R' U R U' R' U' R' F R F'","YYYGYYGGY"],
+  [39,"OLL 39","L F' L' U' L U F U' L'","GYYYGYYGY"],
+  [40,"OLL 40","R' F R U R' U' F' U R","YGYYYGYYG"],
+  [41,"OLL 41","R U R' U R U2 R' F R U R' U' F'","GYYGYYYYY"],
+  [42,"OLL 42","R' U' R U' R' U2 R F R U R' U' F'","YYYYGYYGG"],
+  [43,"OLL 43","f' L' U' L U f","GYYYYYYYG"],
+  [44,"OLL 44","f R U R' U' f'","YGYYYYYGY"],
+  [45,"OLL 45","F R U R' U' F'","YYYYGYGGY"],
+  [46,"OLL 46","R' U' R' F R F' U R","YGYGYYYYY"],
+  [47,"OLL 47","R' U' R' F R F' R' F R F' U R","YYGYGYGGY"],
+  [48,"OLL 48","F R U R' U' R U R' U' F'","GYGYGYGGY"],
+  [49,"OLL 49","r U' r2 U r2 U r2 U' r","YYGYYGYGY"],
+  [50,"OLL 50","r' U r2 U' r2 U' r2 U r'","YGYYYGYGG"],
+  [51,"OLL 51","f R U R' U' R U R' U' f'","YYYGYYGGG"],
+  [52,"OLL 52","R U R' U R d' R U' R' F'","GGGYYYGGY"],
+  [53,"OLL 53","r' U' R U' R' U R U' R' U2 r","YYYYGYYGG"],
+  [54,"OLL 54","r U R' U R U' R' U R U2 r'","GGYYYYYGY"],
+  [55,"OLL 55","R U2 R2 U' R U' R' U2 F R F'","YYYYGYYYY"],
+  [56,"OLL 56","r U r' U R U' R' U R U' R' r U' r'","GYYYGYYGY"],
+  [57,"OLL 57","R U R' U' M' U R U' r'","YGYYGYGGY"],
+];
+
+const PLL_DATA = [
+  ["Aa","A-perm (a)","x R' U R' D2 R U' R' D2 R2 x'","ABCBCAABC"],
+  ["Ab","A-perm (b)","x R2 D2 R U R' D2 R U' R x'","ABCACBBCA"],
+  ["E","E-perm","x' L' U L D' L' U' L D L' U' L D' L' U L D x","ABCCBAABC"],
+  ["F","F-perm","R' U' F' R U R' U' R' F R2 U' R' U' R U R' U R","ABCABCABC"],
+  ["Ga","G-perm (a)","R2 U R' U R' U' R U' R2 U' D R' U R D'","AABBBCCCA"],
+  ["Gb","G-perm (b)","R' U' R U D' R2 U R' U R U' R U' R2 D","AABCBCCAB"],
+  ["Gc","G-perm (c)","R2 U' R U' R U R' U R2 U D' R U' R' D","ABCAABCBC"],
+  ["Gd","G-perm (d)","R U R' U' D R2 U' R U' R' U R' U R2 D'","ABCBACCAB"],
+  ["H","H-perm","M2 U M2 U2 M2 U M2","AABBCCAAB"],
+  ["Ja","J-perm (a)","x' R2 F R F' R U2 r' U r U2 x","ABCACBBCA"],
+  ["Jb","J-perm (b)","R U R' F' R U R' U' R' F R2 U' R'","ABCBACBCA"],
+  ["Na","N-perm (a)","R U R' U R U R' F' R U R' U' R' F R2 U' R' U2 R U' R'","ACBACBACB"],
+  ["Nb","N-perm (b)","R' U L' U2 R U' R' U2 R L U'","CABCABCAB"],
+  ["Ra","R-perm (a)","R U' R' U' R U R D R' U' R D' R' U2 R'","ABCBCAABC"],
+  ["Rb","R-perm (b)","R' U2 R U2 R' F R U R' U' R' F' R2 U'","ABCACBABC"],
+  ["T","T-perm","R U R' U' R' F R2 U' R' U' R U R' F'","ABCBCAABC"],
+  ["Ua","U-perm (a)","R2 U' R' U' R U R U R U' R","AABBBCCCA"],
+  ["Ub","U-perm (b)","R' U R' U' R' U' R' U R U R2","AABCCCBBA"],
+  ["V","V-perm","R' U R' U' y R' F' R2 U' R' U R' F R F","ABCACBCAB"],
+  ["Y","Y-perm","F R U' R' U' R U R' F' R U R' U' R' F R F'","ABCBCACAB"],
+  ["Z","Z-perm","M' U M2 U M2 U M' U2 M2 U'","ABCABCABC"],
+];
+
+// ---- State ----
+let weakSet = new Set(JSON.parse(localStorage.getItem('cubing-weak') || '[]'));
+let currentTab = 'oll';
+let searchVal = '';
+let weakOnly = false;
+
+function saveWeak() {
+  localStorage.setItem('cubing-weak', JSON.stringify([...weakSet]));
+}
+
+// ---- SVG top-face ----
+function makeTopFaceSVG(pattern) {
+  const size = 60;
+  const cell = size / 3;
+  let svg = `<svg viewBox="0 0 ${size} ${size}" width="60" height="60" aria-hidden="true">`;
+  for (let i = 0; i < 9; i++) {
+    const r = Math.floor(i / 3);
+    const c = i % 3;
+    const ch = pattern[i] || 'G';
+    let fill = ch === 'Y' ? '#fde047' : '#d1d5db';
+    // center always yellow
+    if (i === 4) fill = '#fde047';
+    svg += `<rect x="${c*cell+1}" y="${r*cell+1}" width="${cell-2}" height="${cell-2}" rx="2" fill="${fill}" stroke="#9ca3af" stroke-width="0.5"/>`;
+  }
+  svg += '</svg>';
+  return svg;
+}
+
+// PLL arrow SVG
+function makePLLSVG(label) {
+  return `<svg viewBox="0 0 60 60" width="60" height="60" aria-hidden="true">
+    <rect x="1" y="1" width="58" height="58" rx="6" fill="#fde047" stroke="#9ca3af" stroke-width="1"/>
+    <text x="30" y="38" text-anchor="middle" font-size="20" font-weight="bold" fill="#1e293b">${label}</text>
+  </svg>`;
+}
+
+function buildCard(id, name, alg, svgHtml, type) {
+  const weakKey = type + '-' + id;
+  const isWeak = weakSet.has(weakKey);
+  const card = document.createElement('div');
+  card.className = 'case-card bg-white rounded-lg border border-gray-200 p-3 flex flex-col gap-2';
+  card.dataset.key = weakKey;
+  card.dataset.name = name.toLowerCase();
+  card.dataset.alg = alg.toLowerCase();
+  card.dataset.type = type;
+
+  const header = document.createElement('div');
+  header.className = 'flex items-center justify-between';
+
+  const nameEl = document.createElement('span');
+  nameEl.className = 'font-semibold text-sm text-gray-800';
+  nameEl.textContent = name;
+
+  const weakBtn = document.createElement('button');
+  weakBtn.className = 'weak-btn text-xs px-2 py-1 rounded border border-orange-400 text-orange-500 hover:bg-orange-50 transition' + (isWeak ? ' active' : '');
+  weakBtn.textContent = isWeak ? '★弱点' : '☆弱点';
+  weakBtn.setAttribute('aria-label', `${name}を弱点にタグ付け`);
+  weakBtn.setAttribute('aria-pressed', String(isWeak));
+
+  header.appendChild(nameEl);
+  header.appendChild(weakBtn);
+
+  const svgWrapper = document.createElement('div');
+  svgWrapper.className = 'flex justify-center';
+  svgWrapper.innerHTML = svgHtml;
+
+  const algEl = document.createElement('code');
+  algEl.className = 'text-xs bg-gray-100 rounded px-2 py-1 break-all text-gray-700 leading-relaxed';
+  algEl.textContent = alg;
+
+  card.appendChild(header);
+  card.appendChild(svgWrapper);
+  card.appendChild(algEl);
+
+  weakBtn.addEventListener('click', () => {
+    if (weakSet.has(weakKey)) {
+      weakSet.delete(weakKey);
+      weakBtn.classList.remove('active');
+      weakBtn.textContent = '☆弱点';
+      weakBtn.setAttribute('aria-pressed', 'false');
+    } else {
+      weakSet.add(weakKey);
+      weakBtn.classList.add('active');
+      weakBtn.textContent = '★弱点';
+      weakBtn.setAttribute('aria-pressed', 'true');
+    }
+    saveWeak();
+    if (weakOnly) renderCurrent();
+  });
+
+  return card;
+}
+
+function renderOLL() {
+  const grid = document.getElementById('oll-grid');
+  grid.innerHTML = '';
+  let count = 0;
+  OLL_DATA.forEach(([id, name, alg, pat]) => {
+    const key = 'oll-' + id;
+    if (weakOnly && !weakSet.has(key)) return;
+    const q = searchVal.toLowerCase();
+    if (q && !name.toLowerCase().includes(q) && !alg.toLowerCase().includes(q)) return;
+    grid.appendChild(buildCard(id, name, alg, makeTopFaceSVG(pat), 'oll'));
+    count++;
+  });
+  document.getElementById('count-badge').textContent = `${count}件表示`;
+}
+
+function renderPLL() {
+  const grid = document.getElementById('pll-grid');
+  grid.innerHTML = '';
+  let count = 0;
+  PLL_DATA.forEach(([id, name, alg, pat]) => {
+    const key = 'pll-' + id;
+    if (weakOnly && !weakSet.has(key)) return;
+    const q = searchVal.toLowerCase();
+    if (q && !name.toLowerCase().includes(q) && !alg.toLowerCase().includes(q)) return;
+    grid.appendChild(buildCard(id, name, alg, makePLLSVG(id), 'pll'));
+    count++;
+  });
+  document.getElementById('count-badge').textContent = `${count}件表示`;
+}
+
+function renderCurrent() {
+  if (currentTab === 'oll') renderOLL();
+  else renderPLL();
+}
+
+// ---- Tab switching ----
+document.getElementById('tab-oll').addEventListener('click', () => {
+  currentTab = 'oll';
+  document.getElementById('tab-oll').classList.add('active');
+  document.getElementById('tab-oll').setAttribute('aria-selected', 'true');
+  document.getElementById('tab-pll').classList.remove('active');
+  document.getElementById('tab-pll').setAttribute('aria-selected', 'false');
+  document.getElementById('panel-oll').classList.remove('hidden');
+  document.getElementById('panel-pll').classList.add('hidden');
+  renderCurrent();
+});
+
+document.getElementById('tab-pll').addEventListener('click', () => {
+  currentTab = 'pll';
+  document.getElementById('tab-pll').classList.add('active');
+  document.getElementById('tab-pll').setAttribute('aria-selected', 'true');
+  document.getElementById('tab-oll').classList.remove('active');
+  document.getElementById('tab-oll').setAttribute('aria-selected', 'false');
+  document.getElementById('panel-pll').classList.remove('hidden');
+  document.getElementById('panel-oll').classList.add('hidden');
+  renderCurrent();
+});
+
+document.getElementById('search-input').addEventListener('input', (e) => {
+  searchVal = e.target.value;
+  renderCurrent();
+});
+
+document.getElementById('weak-only').addEventListener('change', (e) => {
+  weakOnly = e.target.checked;
+  renderCurrent();
+});
+
+// Initial render
+renderOLL();
+</script>
+</body>
+</html>
